@@ -699,7 +699,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "maskedemail-rs"
+name = "maskedemail"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -708,9 +708,11 @@ dependencies = [
  "env_logger",
  "itertools",
  "once_cell",
+ "quote",
  "reqwest",
  "serde",
  "shadow-rs",
+ "syn",
  "tokio",
  "tracing",
  "tracing-subscriber",

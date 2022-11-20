@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
+use maskedemail::with_client;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
@@ -42,10 +43,22 @@ enum Action {
     List,
 }
 
+#[with_client]
+async fn list() -> Result<()> {
+    Ok(())
+}
+
+#[with_client]
+async fn session() -> Result<()> {
+    debug!("session");
+    debug!("{:#?}", client);
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
-    tracing::debug!("args {:#?}", args);
+    debug!("args {:#?}", args);
     tracing_subscriber::registry()
         .with(fmt::layer())
         .with(EnvFilter::from_default_env())
@@ -53,15 +66,15 @@ async fn main() -> Result<()> {
     APP_NAME.set("maskedmail").unwrap();
     let cfg: Config = confy::load(APP_NAME.get().unwrap(), "config")?;
     let file = confy::get_configuration_file_path(APP_NAME.get().unwrap(), "config")?;
-    tracing::debug!(?cfg);
-    tracing::debug!(?file);
+    debug!(?cfg);
+    debug!(?file);
     CONFIG.set(cfg).unwrap();
-    tracing::debug!("{}", get_api_token());
+    debug!("{}", get_api_token());
     let client = reqwest::Client::new();
     CLIENT.set(client).unwrap();
 
     match &args.action {
-        Action::Session => todo!(),
+        Action::Session => session().await?,
         _ => todo!(),
     };
 
