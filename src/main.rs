@@ -1,4 +1,5 @@
 use anyhow::Result;
+use clap::Parser;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
@@ -25,8 +26,26 @@ fn get_client() -> &'static reqwest::Client {
     &CLIENT.get().unwrap()
 }
 
+#[derive(Parser, Debug)]
+#[clap(author, version, about)]
+pub struct Args {
+    #[command(subcommand)]
+    action: Action,
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum Action {
+    Session,
+    Create,
+    Enable,
+    Disable,
+    List,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    let args = Args::parse();
+    tracing::debug!("args {:#?}", args);
     tracing_subscriber::registry()
         .with(fmt::layer())
         .with(EnvFilter::from_default_env())
@@ -40,5 +59,11 @@ async fn main() -> Result<()> {
     tracing::debug!("{}", get_api_token());
     let client = reqwest::Client::new();
     CLIENT.set(client).unwrap();
+
+    match &args.action {
+        Action::Session => todo!(),
+        _ => todo!(),
+    };
+
     Ok(())
 }
