@@ -1,11 +1,17 @@
 * TODO Masked Mail
-
+https://www.fastmail.com/developer/maskedemail/
 ** TODO configuration
 
 *** env
 
 *** toml
 
+** TODO create
 
+** TODO enable/disable
+
+** TODO email prefix
+
+** TODO List
 
 * TODO Emacs Integration
