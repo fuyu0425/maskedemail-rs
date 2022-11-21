@@ -1,5 +1,6 @@
 #![allow(warnings)]
 
+use futures::future::try_join_all;
 mod consts;
 mod request;
 mod response;
@@ -254,6 +255,15 @@ impl JMAPClient {
             }
         }
         Ok(None)
+    }
+
+    pub async fn find_ids(&self, id_or_emails: Vec<&String>) -> Result<Vec<Option<String>>> {
+        try_join_all(
+            id_or_emails
+                .iter()
+                .map(|id_or_email| self.find_id(&id_or_email)),
+        )
+        .await
     }
 }
 
