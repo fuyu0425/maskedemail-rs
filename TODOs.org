@@ -15,3 +15,4 @@ https://www.fastmail.com/developer/maskedemail/
 ** TODO List
 
 * TODO Emacs Integration
+emacs-friendly output for easier parsing

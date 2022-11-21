@@ -1,11 +1,11 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens};
-use syn::{parse_macro_input, Item, ItemFn, Stmt};
+use quote::quote;
+use syn::{parse_macro_input, ItemFn};
 
 #[proc_macro_attribute]
-pub fn with_client(args: TokenStream, stream: TokenStream) -> TokenStream {
+pub fn with_client(_args: TokenStream, stream: TokenStream) -> TokenStream {
     let input = parse_macro_input!(stream as ItemFn);
     let ItemFn {
         attrs,
