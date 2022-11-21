@@ -72,7 +72,7 @@ impl Account {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct MaskedMail {
     pub id: String,
@@ -135,8 +135,8 @@ pub struct MaskedMailGetResponse {
 }
 
 impl MaskedMailGetResponse {
-    pub fn get_all(&self) -> &Vec<MaskedMail> {
-        &self.method_responses[0].arguments.list
+    pub fn get_all(&self) -> Vec<MaskedMail> {
+        self.method_responses[0].arguments.list.clone()
     }
 }
 

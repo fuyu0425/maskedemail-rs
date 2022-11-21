@@ -78,7 +78,7 @@ pub struct JMAPClient {
     api_token: String,
     client: reqwest::Client,
     session: AsyncOnceCell<SessionResource>,
-    all_masked_mails: Option<MaskedMail>,
+    all_masked_mails: AsyncOnceCell<Vec<MaskedMail>>,
 }
 
 impl JMAPClient {
@@ -95,7 +95,7 @@ impl JMAPClient {
             api_token,
             client,
             session: AsyncOnceCell::<SessionResource>::new(),
-            all_masked_mails: None,
+            all_masked_mails: AsyncOnceCell::<Vec<MaskedMail>>::new(),
         })
     }
 
@@ -117,6 +117,13 @@ impl JMAPClient {
             .await
     }
 
+    pub async fn get_all_masked_mails(&self) -> Result<&Vec<MaskedMail>> {
+        Ok(self
+            .all_masked_mails
+            .get_or_init(async { self.do_list().await.unwrap() })
+            .await)
+    }
+
     pub fn get_api_url(&self) -> &String {
         let s = self.session.get().unwrap();
         &s.api_url
@@ -127,7 +134,7 @@ impl JMAPClient {
         Ok(())
     }
 
-    pub async fn do_list(&mut self) -> Result<MaskedMailGetResponse> {
+    pub async fn do_list(&self) -> Result<Vec<MaskedMail>> {
         debug!("do list");
         let account_id = self
             .get_session()
@@ -150,15 +157,15 @@ impl JMAPClient {
             .json::<MaskedMailGetResponse>()
             .await?;
         debug!("{:#?}", r);
-        let all_masked_mails: &Vec<MaskedMail> = r.get_all();
+        let all_masked_mails: Vec<MaskedMail> = r.get_all();
 
         for m in all_masked_mails.iter() {
             println!("{}", m);
         }
 
-        Ok(r)
+        Ok(all_masked_mails)
     }
-    pub async fn do_create(&mut self, domain: String, enable: bool) -> Result<()> {
+    pub async fn do_create(&self, domain: String, enable: bool) -> Result<()> {
         debug!("do create for domain {domain}");
         let account_id = self
             .get_session()
@@ -195,7 +202,7 @@ impl JMAPClient {
         Ok(())
     }
 
-    pub async fn do_remove(&mut self, ids: Vec<String>) -> Result<()> {
+    pub async fn do_remove(&self, ids: Vec<String>) -> Result<()> {
         debug!("do remove for {ids:#?}");
         let account_id = self
             .get_session()
@@ -222,11 +229,9 @@ impl JMAPClient {
         Ok(())
     }
 
-    pub async fn do_clean(&mut self) -> Result<()> {
-        let list_result = self.do_list().await?;
-        let all_masked_mails: &Vec<MaskedMail> = list_result.get_all();
+    pub async fn do_clean(&self) -> Result<()> {
         let mut destroy_ids = vec![];
-        for m in all_masked_mails.iter() {
+        for m in self.get_all_masked_mails().await?.iter() {
             if let Some(state) = &m.state {
                 if state == "pending" {
                     destroy_ids.push(m.id.to_string());
@@ -238,14 +243,12 @@ impl JMAPClient {
         Ok(())
     }
 
-    pub async fn find_id(&mut self, id_or_email: &String) -> Result<Option<String>> {
+    pub async fn find_id(&self, id_or_email: &String) -> Result<Option<String>> {
         if !id_or_email.contains("@") {
             return Ok(Some(id_or_email.to_string()));
         }
 
-        let list_result = self.do_list().await?;
-        let all_masked_mails: &Vec<MaskedMail> = list_result.get_all();
-        for m in all_masked_mails.iter() {
+        for m in self.get_all_masked_mails().await?.iter() {
             if id_or_email == &m.email {
                 return Ok(Some(m.id.to_string()));
             }
