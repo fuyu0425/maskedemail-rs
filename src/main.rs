@@ -1,5 +1,6 @@
 #![allow(warnings)]
 
+use clap_verbosity_flag::Verbosity;
 use futures::future::try_join_all;
 mod consts;
 mod request;
@@ -49,14 +50,18 @@ pub struct Args {
     /// emacs-friendly output
     #[clap(long = "emacs", short = 'e', default_value = "false")]
     emacs: bool,
+
+    #[clap(flatten)]
+    verbose: clap_verbosity_flag::Verbosity,
 }
 
 #[derive(clap::Subcommand, Debug)]
 enum Action {
     Session,
     Create {
+        /// website domain (e.g. facebook.com)
         domain: String,
-        /// enable after creation
+        /// enable when creation
         #[clap(long = "enable", default_value = "false")]
         enable: bool,
     },
@@ -69,9 +74,14 @@ enum Action {
     Remove {
         id_or_email: String,
     },
-    List,
+    List {
+        /// show deleted ones
+        #[clap(long = "deleted", default_value = "false")]
+        show_deleted: bool,
+    },
+    /// clean pending ones
     Clean {
-        /// also clean disabled one
+        /// also clean disabled ones
         #[clap(long = "disable", default_value = "false")]
         disable: bool,
     },
@@ -124,7 +134,7 @@ impl JMAPClient {
     pub async fn get_all_masked_mails(&self) -> Result<&Vec<MaskedMail>> {
         Ok(self
             .all_masked_mails
-            .get_or_init(async { self.do_list().await.unwrap() })
+            .get_or_init(async { self.do_list(true).await.unwrap() })
             .await)
     }
 
@@ -138,7 +148,7 @@ impl JMAPClient {
         Ok(())
     }
 
-    pub async fn do_list(&self) -> Result<Vec<MaskedMail>> {
+    pub async fn do_list(&self, show_deleted: bool) -> Result<Vec<MaskedMail>> {
         debug!("do list");
         let account_id = self
             .get_session()
@@ -163,8 +173,11 @@ impl JMAPClient {
         debug!("{:#?}", r);
         let all_masked_mails: Vec<MaskedMail> = r.get_all();
 
+        let d = Some("deleted".to_string());
         for m in all_masked_mails.iter() {
-            println!("{}", m);
+            if show_deleted || m.state != d {
+                println!("{}", m);
+            }
         }
 
         Ok(all_masked_mails)
@@ -325,13 +338,25 @@ impl JMAPClient {
     }
 }
 
+fn convert_filter(filter: log::LevelFilter) -> tracing_subscriber::filter::LevelFilter {
+    println!("{:#?}", &filter);
+    match filter {
+        log::LevelFilter::Off => tracing_subscriber::filter::LevelFilter::OFF,
+        log::LevelFilter::Error => tracing_subscriber::filter::LevelFilter::ERROR,
+        log::LevelFilter::Warn => tracing_subscriber::filter::LevelFilter::WARN,
+        log::LevelFilter::Info => tracing_subscriber::filter::LevelFilter::INFO,
+        log::LevelFilter::Debug => tracing_subscriber::filter::LevelFilter::DEBUG,
+        log::LevelFilter::Trace => tracing_subscriber::filter::LevelFilter::TRACE,
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
     debug!("args {:#?}", args);
     tracing_subscriber::registry()
-        .with(fmt::layer())
-        .with(EnvFilter::from_default_env())
+        .with(fmt::layer().with_filter(convert_filter(args.verbose.log_level_filter())))
+        // .with(EnvFilter::from_default_env())
         .init();
     APP_NAME.set("maskedmail").unwrap();
     let cfg: Config = confy::load(APP_NAME.get().unwrap(), "config")?;
@@ -343,8 +368,8 @@ async fn main() -> Result<()> {
     let mut jmap_client = JMAPClient::new(get_api_token().to_string())?;
     match &args.action {
         Action::Session => jmap_client.do_session().await?,
-        Action::List => {
-            jmap_client.do_list().await?;
+        Action::List { show_deleted } => {
+            jmap_client.do_list(*show_deleted).await?;
         }
         Action::Create { domain, enable } => {
             jmap_client.do_create(domain.to_string(), *enable).await?
