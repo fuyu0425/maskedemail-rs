@@ -35,12 +35,6 @@ fn get_api_token() -> &'static String {
     &CONFIG.get().unwrap().api_token
 }
 
-static CLIENT: OnceCell<reqwest::Client> = OnceCell::new();
-
-fn get_client() -> &'static reqwest::Client {
-    &CLIENT.get().unwrap()
-}
-
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
 pub struct Args {
