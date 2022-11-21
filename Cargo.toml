@@ -14,6 +14,7 @@ proc-macro = true
 
 [dependencies]
 anyhow = "1.0.66"
+async-once-cell = "0.4.2"
 chrono = { version = "0.4.23", features = ["serde"] }
 clap = { version = "4.0.26", features = ["derive"] }
 confy = "0.5.1"

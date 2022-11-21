@@ -77,10 +77,10 @@ impl Account {
 pub struct MaskedMail {
     pub id: String,
     pub email: String,
-    pub state: String,
-    pub for_domain: String,
-    pub description: String,
-    pub last_message_at: chrono::DateTime<chrono::Utc>,
+    pub state: Option<String>,
+    pub for_domain: Option<String>,
+    pub description: Option<String>,
+    pub last_message_at: Option<chrono::DateTime<chrono::Utc>>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub created_by: String,
     pub url: Option<String>,
@@ -90,8 +90,19 @@ impl fmt::Display for MaskedMail {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "id: {}\t email: {}\t domain: {}",
-            self.id, self.email, self.for_domain
+            "id: {}\t email: {}\t domain: {}\t state: {}",
+            self.id,
+            self.email,
+            if let Some(domain) = &self.for_domain {
+                domain.as_str()
+            } else {
+                ""
+            },
+            if let Some(state) = &self.state {
+                state.as_str()
+            } else {
+                ""
+            }
         )
     }
 }
@@ -127,4 +138,43 @@ impl MaskedMailGetResponse {
     pub fn get_all(&self) -> &Vec<MaskedMail> {
         &self.method_responses[0].arguments.list
     }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetError {
+    pub r#type: String,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MaskedMailSetResponseAll {
+    pub account_id: String,
+    pub old_state: Option<String>,
+    pub new_state: Option<String>,
+    pub created: Option<BTreeMap<String, MaskedMail>>,
+    pub updated: Option<BTreeMap<String, MaskedMail>>,
+    pub destroyed: Option<Vec<String>>,
+    pub not_created: Option<BTreeMap<String, SetError>>,
+    pub not_updated: Option<BTreeMap<String, SetError>>,
+    pub not_destroyed: Option<BTreeMap<String, SetError>>,
+}
+
+#[derive(Debug, Deserialize_tuple, Serialize_tuple)]
+#[serde(rename_all = "camelCase")]
+pub struct ResSetInvocation {
+    pub name: String,
+    pub arguments: MaskedMailSetResponseAll,
+    pub method_call_id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MaskedMailSetResponse {
+    pub latest_client_version: String,
+    pub method_responses: Vec<ResSetInvocation>,
+    pub session_state: String,
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, Value>,
 }

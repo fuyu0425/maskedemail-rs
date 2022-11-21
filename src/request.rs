@@ -53,6 +53,20 @@ pub struct MaskedMailCreate {
     email_prefix: Option<String>,
 }
 
+impl MaskedMailCreate {
+    pub fn new(for_domain: String, description: String, state: Option<String>) -> Self {
+        let mut ret = Self {
+            for_domain,
+            description,
+            ..Default::default()
+        };
+        if let Some(state) = state {
+            ret.state = state
+        };
+        ret
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Derivative)]
 #[derivative(Default)]
 #[serde(rename_all = "camelCase")]
@@ -130,6 +144,24 @@ impl MaskedMailSet {
             account_id,
             update: Some(patch_map),
             ..Default::default()
+        }
+    }
+
+    pub fn new_destory(account_id: String, ids: Vec<String>) -> Self {
+        Self {
+            account_id,
+            destroy: Some(ids),
+            ..Default::default()
+        }
+    }
+}
+
+impl From<MaskedMailSet> for Invocation {
+    fn from(item: MaskedMailSet) -> Self {
+        Self {
+            name: "MaskedEmail/set".to_string(),
+            arguments: Method::Set(item),
+            method_call_id: "default".to_string(),
         }
     }
 }

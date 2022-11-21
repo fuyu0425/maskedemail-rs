@@ -13,6 +13,7 @@ use anyhow::Result;
 use clap::Parser;
 use maskedemail::with_client;
 use once_cell::sync::OnceCell;
+// use async_once_cell::OnceCell;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
@@ -52,17 +53,32 @@ pub struct Args {
 #[derive(clap::Subcommand, Debug)]
 enum Action {
     Session,
-    Create,
-    Enable,
-    Disable,
+    Create {
+        domain: String,
+        /// enable after creation
+        #[clap(long = "enable", default_value = "false")]
+        enable: bool,
+    },
+    Enable {
+        email: String,
+    },
+    Disable {
+        email: String,
+    },
+    Remove {
+        id: String,
+    },
     List,
+    /// destory all pending ones
+    Clean,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct JMAPClient {
     api_token: String,
     client: reqwest::Client,
-    session: OnceCell<SessionResource>,
+    session: async_once_cell::OnceCell<SessionResource>,
+    all_masked_mails: Option<MaskedMail>,
 }
 
 impl JMAPClient {
@@ -78,25 +94,27 @@ impl JMAPClient {
         Ok(Self {
             api_token,
             client,
-            ..Default::default()
+            session: async_once_cell::OnceCell::<SessionResource>::new(),
+            all_masked_mails: None,
         })
     }
 
-    pub async fn init(&mut self) -> Result<()> {
-        debug!("session");
-        let session = self
-            .client
-            .get(SESSION_ENDPOINT)
-            .send()
-            .await?
-            .json::<SessionResource>()
-            .await?;
-        self.session.set(session).unwrap();
-        Ok(())
-    }
-
-    pub fn get_session(&self) -> &SessionResource {
-        self.session.get().expect("session is not initialized")
+    pub async fn get_session(&self) -> &SessionResource {
+        self.session
+            .get_or_init(async {
+                debug!("session");
+                let session = self
+                    .client
+                    .get(SESSION_ENDPOINT)
+                    .send()
+                    .await
+                    .unwrap()
+                    .json::<SessionResource>()
+                    .await
+                    .unwrap();
+                session
+            })
+            .await
     }
 
     pub fn get_api_url(&self) -> &String {
@@ -105,16 +123,15 @@ impl JMAPClient {
     }
 
     pub async fn do_session(&mut self) -> Result<()> {
-        self.init().await?;
-        debug!("{:#?}", &self.get_session());
+        debug!("{:#?}", &self.get_session().await);
         Ok(())
     }
 
-    pub async fn do_list(&mut self) -> Result<()> {
-        self.init().await?;
+    pub async fn do_list(&mut self) -> Result<MaskedMailGetResponse> {
         debug!("do list");
         let account_id = self
             .get_session()
+            .await
             .get_default_account_for_cap(MASKEDEMAIL_CAP)?;
 
         let m = MaskedMailGetAll::new(account_id.to_string());
@@ -139,6 +156,85 @@ impl JMAPClient {
             println!("{}", m);
         }
 
+        Ok(r)
+    }
+    pub async fn do_create(&mut self, domain: String, enable: bool) -> Result<()> {
+        debug!("do create for domain {domain}");
+        let account_id = self
+            .get_session()
+            .await
+            .get_default_account_for_cap(MASKEDEMAIL_CAP)?;
+        let mut masked_mail_create = MaskedMailCreate::new(
+            domain,
+            "test create".to_string(),
+            if enable {
+                Some("enabled".to_string())
+            } else {
+                None
+            },
+        );
+        let mut masked_mail_set =
+            MaskedMailSet::new_create(account_id.to_string(), masked_mail_create);
+        let invo: Invocation = masked_mail_set.into();
+        let jmap_request = JMAPRequest::new(
+            vec![JMAP_CORE_CAP.to_string(), MASKEDEMAIL_CAP.to_string()],
+            vec![invo],
+        );
+        let r = self
+            .client
+            .post(self.get_api_url())
+            .json(&jmap_request)
+            .send()
+            .await?
+            .json::<Value>()
+            .await?;
+        debug!("{:#?}", r);
+
+        let m: MaskedMailSetResponse = serde_json::from_value(r)?;
+        debug!("{:#?}", m);
+        Ok(())
+    }
+
+    pub async fn do_remove(&mut self, ids: Vec<String>) -> Result<()> {
+        debug!("do remove for {ids:#?}");
+        let account_id = self
+            .get_session()
+            .await
+            .get_default_account_for_cap(MASKEDEMAIL_CAP)?;
+        let mut masked_mail_set = MaskedMailSet::new_destory(account_id.to_string(), ids);
+        let invo: Invocation = masked_mail_set.into();
+        let jmap_request = JMAPRequest::new(
+            vec![JMAP_CORE_CAP.to_string(), MASKEDEMAIL_CAP.to_string()],
+            vec![invo],
+        );
+        let r = self
+            .client
+            .post(self.get_api_url())
+            .json(&jmap_request)
+            .send()
+            .await?
+            .json::<Value>()
+            .await?;
+        debug!("{:#?}", r);
+
+        let m: MaskedMailSetResponse = serde_json::from_value(r)?;
+        debug!("{:#?}", m);
+        Ok(())
+    }
+
+    pub async fn do_clean(&mut self) -> Result<()> {
+        let list_result = self.do_list().await?;
+        let all_masked_mails: &Vec<MaskedMail> = list_result.get_all();
+        let mut destroy_ids = vec![];
+        for m in all_masked_mails.iter() {
+            if let Some(state) = &m.state {
+                if state == "pending" {
+                    destroy_ids.push(m.id.to_string());
+                }
+            }
+        }
+
+        self.do_remove(destroy_ids).await?;
         Ok(())
     }
 }
@@ -154,15 +250,23 @@ async fn main() -> Result<()> {
     APP_NAME.set("maskedmail").unwrap();
     let cfg: Config = confy::load(APP_NAME.get().unwrap(), "config")?;
     let file = confy::get_configuration_file_path(APP_NAME.get().unwrap(), "config")?;
-    debug!(?cfg);
+    // debug!(?cfg);
     debug!(?file);
     CONFIG.set(cfg).unwrap();
-    debug!("{}", get_api_token());
 
     let mut jmap_client = JMAPClient::new(get_api_token().to_string())?;
     match &args.action {
         Action::Session => jmap_client.do_session().await?,
-        Action::List => jmap_client.do_list().await?,
+        Action::List => {
+            jmap_client.do_list().await?;
+        }
+        Action::Create { domain, enable } => {
+            jmap_client.do_create(domain.to_string(), *enable).await?
+        }
+        Action::Remove { id } => jmap_client.do_remove(vec![id.to_string()]).await?,
+        Action::Enable { email } => todo!(),
+        Action::Disable { email } => todo!(),
+        Action::Clean => jmap_client.do_clean().await?,
         _ => todo!(),
     };
 
