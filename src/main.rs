@@ -10,10 +10,10 @@ use response::*;
 use serde_json::Value;
 
 use anyhow::Result;
+use async_once_cell::OnceCell as AsyncOnceCell;
 use clap::Parser;
 use maskedemail::with_client;
 use once_cell::sync::OnceCell;
-// use async_once_cell::OnceCell;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
@@ -60,13 +60,13 @@ enum Action {
         enable: bool,
     },
     Enable {
-        email: String,
+        id_or_email: String,
     },
     Disable {
-        email: String,
+        id_or_email: String,
     },
     Remove {
-        id: String,
+        id_or_email: String,
     },
     List,
     /// destory all pending ones
@@ -77,7 +77,7 @@ enum Action {
 pub struct JMAPClient {
     api_token: String,
     client: reqwest::Client,
-    session: async_once_cell::OnceCell<SessionResource>,
+    session: AsyncOnceCell<SessionResource>,
     all_masked_mails: Option<MaskedMail>,
 }
 
@@ -94,7 +94,7 @@ impl JMAPClient {
         Ok(Self {
             api_token,
             client,
-            session: async_once_cell::OnceCell::<SessionResource>::new(),
+            session: AsyncOnceCell::<SessionResource>::new(),
             all_masked_mails: None,
         })
     }
@@ -237,6 +237,21 @@ impl JMAPClient {
         self.do_remove(destroy_ids).await?;
         Ok(())
     }
+
+    pub async fn find_id(&mut self, id_or_email: &String) -> Result<Option<String>> {
+        if !id_or_email.contains("@") {
+            return Ok(Some(id_or_email.to_string()));
+        }
+
+        let list_result = self.do_list().await?;
+        let all_masked_mails: &Vec<MaskedMail> = list_result.get_all();
+        for m in all_masked_mails.iter() {
+            if id_or_email == &m.email {
+                return Ok(Some(m.id.to_string()));
+            }
+        }
+        Ok(None)
+    }
 }
 
 #[tokio::main]
@@ -263,9 +278,12 @@ async fn main() -> Result<()> {
         Action::Create { domain, enable } => {
             jmap_client.do_create(domain.to_string(), *enable).await?
         }
-        Action::Remove { id } => jmap_client.do_remove(vec![id.to_string()]).await?,
-        Action::Enable { email } => todo!(),
-        Action::Disable { email } => todo!(),
+        Action::Remove { id_or_email } => {
+            let id = jmap_client.find_id(id_or_email).await?.unwrap();
+            jmap_client.do_remove(vec![id]).await?
+        }
+        Action::Enable { id_or_email } => todo!(),
+        Action::Disable { id_or_email } => todo!(),
         Action::Clean => jmap_client.do_clean().await?,
         _ => todo!(),
     };
