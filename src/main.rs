@@ -70,8 +70,11 @@ enum Action {
         id_or_email: String,
     },
     List,
-    /// destory all pending ones
-    Clean,
+    Clean {
+        /// also clean disabled one
+        #[clap(long = "disable", default_value = "false")]
+        disable: bool,
+    },
 }
 
 #[derive(Debug)]
@@ -203,6 +206,33 @@ impl JMAPClient {
         Ok(())
     }
 
+    pub async fn do_enable(&self, id: String) -> Result<()> {
+        debug!("do enable for {id:#?}");
+        let account_id = self
+            .get_session()
+            .await
+            .get_default_account_for_cap(MASKEDEMAIL_CAP)?;
+        let mut masked_mail_set = MaskedMailSet::new_enable(account_id.to_string(), id);
+        let invo: Invocation = masked_mail_set.into();
+        let jmap_request = JMAPRequest::new(
+            vec![JMAP_CORE_CAP.to_string(), MASKEDEMAIL_CAP.to_string()],
+            vec![invo],
+        );
+        let r = self
+            .client
+            .post(self.get_api_url())
+            .json(&jmap_request)
+            .send()
+            .await?
+            .json::<Value>()
+            .await?;
+        debug!("{:#?}", r);
+
+        let m: MaskedMailSetResponse = serde_json::from_value(r)?;
+        debug!("{:#?}", m);
+        Ok(())
+    }
+
     pub async fn do_remove(&self, ids: Vec<String>) -> Result<()> {
         debug!("do remove for {ids:#?}");
         let account_id = self
@@ -230,11 +260,39 @@ impl JMAPClient {
         Ok(())
     }
 
-    pub async fn do_clean(&self) -> Result<()> {
+    pub async fn do_disable(&self, id: String) -> Result<()> {
+        debug!("do disable for {id:#?}");
+        let account_id = self
+            .get_session()
+            .await
+            .get_default_account_for_cap(MASKEDEMAIL_CAP)?;
+        let mut masked_mail_set = MaskedMailSet::new_disable(account_id.to_string(), id);
+        let invo: Invocation = masked_mail_set.into();
+        let jmap_request = JMAPRequest::new(
+            vec![JMAP_CORE_CAP.to_string(), MASKEDEMAIL_CAP.to_string()],
+            vec![invo],
+        );
+        let r = self
+            .client
+            .post(self.get_api_url())
+            .json(&jmap_request)
+            .send()
+            .await?
+            .json::<Value>()
+            .await?;
+        debug!("{:#?}", r);
+
+        let m: MaskedMailSetResponse = serde_json::from_value(r)?;
+        debug!("{:#?}", m);
+        Ok(())
+    }
+    pub async fn do_clean(&self, disable: bool) -> Result<()> {
         let mut destroy_ids = vec![];
         for m in self.get_all_masked_mails().await?.iter() {
             if let Some(state) = &m.state {
                 if state == "pending" {
+                    destroy_ids.push(m.id.to_string());
+                } else if disable && state == "disabled" {
                     destroy_ids.push(m.id.to_string());
                 }
             }
@@ -295,9 +353,15 @@ async fn main() -> Result<()> {
             let id = jmap_client.find_id(id_or_email).await?.unwrap();
             jmap_client.do_remove(vec![id]).await?
         }
-        Action::Enable { id_or_email } => todo!(),
-        Action::Disable { id_or_email } => todo!(),
-        Action::Clean => jmap_client.do_clean().await?,
+        Action::Enable { id_or_email } => {
+            let id = jmap_client.find_id(id_or_email).await?.unwrap();
+            jmap_client.do_enable(id).await?
+        }
+        Action::Disable { id_or_email } => {
+            let id = jmap_client.find_id(id_or_email).await?.unwrap();
+            jmap_client.do_disable(id).await?
+        }
+        Action::Clean { disable } => jmap_client.do_clean(*disable).await?,
         _ => todo!(),
     };
 

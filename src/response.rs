@@ -154,7 +154,7 @@ pub struct MaskedMailSetResponseAll {
     pub old_state: Option<String>,
     pub new_state: Option<String>,
     pub created: Option<BTreeMap<String, MaskedMail>>,
-    pub updated: Option<BTreeMap<String, MaskedMail>>,
+    pub updated: Option<BTreeMap<String, Option<MaskedMail>>>,
     pub destroyed: Option<Vec<String>>,
     pub not_created: Option<BTreeMap<String, SetError>>,
     pub not_updated: Option<BTreeMap<String, SetError>>,

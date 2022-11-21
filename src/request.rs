@@ -147,6 +147,22 @@ impl MaskedMailSet {
         }
     }
 
+    pub fn new_enable(account_id: String, mm_id: String) -> Self {
+        let patch = MaskedMailPatch {
+            state: Some("enabled".to_string()),
+            ..Default::default()
+        };
+        Self::new_update(account_id, mm_id, patch)
+    }
+
+    pub fn new_disable(account_id: String, mm_id: String) -> Self {
+        let patch = MaskedMailPatch {
+            state: Some("disabled".to_string()),
+            ..Default::default()
+        };
+        Self::new_update(account_id, mm_id, patch)
+    }
+
     pub fn new_destory(account_id: String, ids: Vec<String>) -> Self {
         Self {
             account_id,
