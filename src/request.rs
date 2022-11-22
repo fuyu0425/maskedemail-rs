@@ -127,9 +127,9 @@ pub struct MaskedMailSet {
 }
 
 impl MaskedMailSet {
-    pub fn new_create(account_id: String, create: MaskedMailCreate) -> Self {
+    pub fn new_create(account_id: String, create: MaskedMailCreate, tmp_id: &String) -> Self {
         let mut create_map = BTreeMap::new();
-        create_map.insert("test".to_string(), create);
+        create_map.insert(tmp_id.to_string(), create);
         Self {
             account_id,
             create: Some(create_map),

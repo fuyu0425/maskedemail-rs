@@ -185,7 +185,7 @@ impl JMAPClient {
             .await
             .get_default_account_for_cap(MASKEDEMAIL_CAP)?;
         let mut masked_mail_create = MaskedMailCreate::new(
-            domain,
+            domain.clone(),
             "test create".to_string(),
             if enable {
                 Some("enabled".to_string())
@@ -193,8 +193,9 @@ impl JMAPClient {
                 None
             },
         );
+        let tmp_id = "tmp_id".to_string();
         let mut masked_mail_set =
-            MaskedMailSet::new_create(account_id.to_string(), masked_mail_create);
+            MaskedMailSet::new_create(account_id.to_string(), masked_mail_create, &tmp_id);
         let invo: Invocation = masked_mail_set.into();
         let jmap_request = JMAPRequest::new(
             vec![JMAP_CORE_CAP.to_string(), MASKEDEMAIL_CAP.to_string()],
@@ -212,6 +213,11 @@ impl JMAPClient {
 
         let m: MaskedMailSetResponse = serde_json::from_value(r)?;
         debug!("{:#?}", m);
+        let mut created = m.get_created(&tmp_id);
+        if let Some(mut created) = created {
+            created.for_domain = Some(domain);
+            println!("{}", created);
+        }
         Ok(())
     }
 

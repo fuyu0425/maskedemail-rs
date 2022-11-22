@@ -207,3 +207,10 @@ pub struct MaskedMailSetResponse {
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
 }
+
+impl MaskedMailSetResponse {
+    pub fn get_created(&self, key: &String) -> Option<MaskedMail> {
+        let created = self.method_responses[0].arguments.created.clone();
+        created.and_then(|created_map| created_map.get(key).cloned())
+    }
+}
