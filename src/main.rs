@@ -14,13 +14,12 @@ use serde_json::Value;
 use anyhow::Result;
 use async_once_cell::OnceCell as AsyncOnceCell;
 use clap::Parser;
-use maskedemail::with_client;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
-static APP_NAME: OnceCell<&str> = OnceCell::new();
+use maskedemail::{is_emacs, APP_NAME, EMACS};
 
 shadow_rs::shadow!(build);
 
@@ -42,7 +41,7 @@ pub struct Args {
     action: Action,
 
     /// emacs-friendly output
-    #[clap(long = "emacs", short = 'e', default_value = "false")]
+    #[clap(long = "emacs", short = 'e', default_value = "false", global = true)]
     emacs: bool,
 
     #[clap(flatten)]
@@ -139,6 +138,9 @@ impl JMAPClient {
 
     pub async fn do_session(&mut self) -> Result<()> {
         debug!("{:#?}", &self.get_session().await);
+        if is_emacs() {
+            println!("ok");
+        }
         Ok(())
     }
 
@@ -333,7 +335,6 @@ impl JMAPClient {
 }
 
 fn convert_filter(filter: log::LevelFilter) -> tracing_subscriber::filter::LevelFilter {
-    println!("{:#?}", &filter);
     match filter {
         log::LevelFilter::Off => tracing_subscriber::filter::LevelFilter::OFF,
         log::LevelFilter::Error => tracing_subscriber::filter::LevelFilter::ERROR,
@@ -358,6 +359,8 @@ async fn main() -> Result<()> {
     // debug!(?cfg);
     debug!(?file);
     CONFIG.set(cfg).unwrap();
+
+    EMACS.set(args.emacs).unwrap();
 
     let mut jmap_client = JMAPClient::new(get_api_token().to_string())?;
     match &args.action {

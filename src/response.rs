@@ -1,5 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use chrono;
+use maskedemail::{is_emacs, APP_NAME, EMACS};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_tuple::{Deserialize_tuple, Serialize_tuple};
@@ -88,22 +89,50 @@ pub struct MaskedMail {
 
 impl fmt::Display for MaskedMail {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "id: {}\t email: {}\t domain: {}\t state: {}",
-            self.id,
+        if !is_emacs() {
+            write!(
+                f,
+                "id: {}\t email: {}\t domain: {}\t state: {}",
+                self.id,
+                self.email,
+                if let Some(domain) = &self.for_domain {
+                    domain.as_str()
+                } else {
+                    ""
+                },
+                if let Some(state) = &self.state {
+                    state.as_str()
+                } else {
+                    ""
+                }
+            )
+        } else {
+            write!(f, "{}", self.to_emacs())
+        }
+    }
+}
+
+impl MaskedMail {
+    pub fn to_emacs(&self) -> String {
+        format!(
+            "{} {} {}",
             self.email,
             if let Some(domain) = &self.for_domain {
-                domain.as_str()
+                if !domain.is_empty() {
+                    domain.as_str()
+                } else {
+                    "nil"
+                }
             } else {
-                ""
+                "nil"
             },
             if let Some(state) = &self.state {
                 state.as_str()
             } else {
-                ""
+                "nil"
             }
         )
+        .to_string()
     }
 }
 
