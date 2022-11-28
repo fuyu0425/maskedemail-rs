@@ -54,10 +54,16 @@ pub struct MaskedMailCreate {
 }
 
 impl MaskedMailCreate {
-    pub fn new(for_domain: String, description: String, state: Option<String>) -> Self {
+    pub fn new(
+        for_domain: String,
+        description: String,
+        state: Option<String>,
+        email_prefix: Option<String>,
+    ) -> Self {
         let mut ret = Self {
             for_domain,
             description,
+            email_prefix,
             ..Default::default()
         };
         if let Some(state) = state {

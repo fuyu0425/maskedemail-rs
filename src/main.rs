@@ -57,6 +57,8 @@ enum Action {
         /// enable when creation
         #[clap(long = "enable", default_value = "false")]
         enable: bool,
+        #[clap(long = "prefix", short = 'p')]
+        prefix: Option<String>,
     },
     Enable {
         id_or_email: String,
@@ -67,6 +69,7 @@ enum Action {
     Remove {
         id_or_email: String,
     },
+    #[clap(alias = "ls")]
     List {
         /// show deleted ones
         #[clap(long = "deleted", default_value = "false")]
@@ -178,7 +181,12 @@ impl JMAPClient {
 
         Ok(all_masked_mails)
     }
-    pub async fn do_create(&self, domain: String, enable: bool) -> Result<()> {
+    pub async fn do_create(
+        &self,
+        domain: String,
+        enable: bool,
+        email_prefix: &Option<String>,
+    ) -> Result<()> {
         debug!("do create for domain {domain}");
         let account_id = self
             .get_session()
@@ -192,6 +200,7 @@ impl JMAPClient {
             } else {
                 None
             },
+            email_prefix.clone(),
         );
         let tmp_id = "tmp_id".to_string();
         let mut masked_mail_set =
@@ -374,8 +383,14 @@ async fn main() -> Result<()> {
         Action::List { show_deleted } => {
             jmap_client.do_list(*show_deleted).await?;
         }
-        Action::Create { domain, enable } => {
-            jmap_client.do_create(domain.to_string(), *enable).await?
+        Action::Create {
+            domain,
+            enable,
+            prefix,
+        } => {
+            jmap_client
+                .do_create(domain.to_string(), *enable, prefix)
+                .await?
         }
         Action::Remove { id_or_email } => {
             let id = jmap_client.find_id(id_or_email).await?.unwrap();
