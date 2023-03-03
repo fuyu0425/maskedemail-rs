@@ -194,7 +194,7 @@ impl JMAPClient {
             .get_default_account_for_cap(MASKEDEMAIL_CAP)?;
         let mut masked_mail_create = MaskedMailCreate::new(
             domain.clone(),
-            "test create".to_string(),
+            domain.clone(),
             if enable {
                 Some("enabled".to_string())
             } else {
