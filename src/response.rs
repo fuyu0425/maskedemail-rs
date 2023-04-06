@@ -156,7 +156,7 @@ pub struct ResInvocation {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MaskedMailGetResponse {
-    pub latest_client_version: String,
+    // pub latest_client_version: String,
     pub method_responses: Vec<ResInvocation>,
     pub session_state: String,
     #[serde(flatten)]

@@ -168,8 +168,10 @@ impl JMAPClient {
             .send()
             .await?
             .json::<MaskedMailGetResponse>()
+            // .json::<Value>()  // debug use
             .await?;
         debug!("{:#?}", r);
+        // let all_masked_mails: Vec<MaskedMail> = vec![]; // debug use
         let all_masked_mails: Vec<MaskedMail> = r.get_all();
 
         let d = Some("deleted".to_string());
